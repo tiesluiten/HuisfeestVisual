@@ -1,0 +1,81 @@
+var w;
+var xold;
+var yold;
+var mic;
+var micBar = 0.0001;  // set threshold value mic
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  background(10);
+  
+  w = new Walker();
+  
+  // initialize p5.Audio
+  mic = new p5.AudioIn()
+  mic.start();
+}
+
+function draw() {
+  w.walk();
+  w.display();
+}
+
+function Walker() {
+  // set starting position
+  this.pos = createVector(width/2, height/2);
+  
+  this.walk = function() {
+    // get mic amplitude
+    micLevel = mic.getLevel();
+    
+    if(micLevel >= micBar){
+      micRandom = map(micLevel, 0, 0.075, 0, 200);
+
+      this.vel = createVector(random(-micRandom, micRandom), random(-micRandom, micRandom));
+      this.pos = this.pos.add(this.vel);
+      
+      // set boundaries for walker
+      if(this.pos.x < 0){
+        this.pos.x = this.pos.x + 50;
+      }
+      if(this.pos.x > width){
+        this.pos.x = this.pos.x - 50;
+      }
+      if(this.pos.y < 0){
+        this.pos.y = this.pos.y + 50;
+      }
+      if(this.pos.y > height){
+        this.pos.y = this.pos.y - 50;
+      }
+      
+      print("MicLevel = " + micLevel);
+      print("MicRandom = " + micRandom);
+    }
+  }
+  
+  this.display = function() {
+    micStroke = map(micLevel, 0, 0.075, 0, 255);  // StrokeColor based on mic level
+    micSW = map(micLevel, 0., 0.075, 0.1, 1.0);   // StrokeWeight based on mic level
+    
+    print("MicStroke = " + micStroke);
+    print("MicSW = " + micSW);
+
+    // check if position has changed since last draw
+    if(this.pos.x == xold && this.pos.y == yold){
+        // do nothing
+    }
+    
+    else{
+      noStroke();
+      ellipse(this.pos.x, this.pos.y, (width/600), (width/600));
+      
+      stroke(255 - micStroke);
+      line(xold,yold,this.pos.x,this.pos.y);
+      
+      xold=this.pos.x;
+      yold=this.pos.y;
+    }
+  
+  }
+
+}
