@@ -1,0 +1,335 @@
+/*
+Credits to Jacob Joaquin.
+AudioVisual Interaction added by Wouter Jongeneel and Ties Luiten.
+-
+There are some minor adjustments plus added a simple way to include audio vol. as input.
+-
+For audio analysis we make use of the Minim library.
+SOURCE: http://code.compartmental.net/minim/audioinput_method_addlistener.html
+*/
+ 
+import processing.pdf.*; 
+ 
+// Import Minim library for audio analysis.
+import ddf.minim.*;
+Minim minim;
+AudioInput in;
+
+// For amplitude analysis, we store the current amplitude in amp,
+// which we then add to our ampBuffer[] array to be able to calculate
+// the average value, which we later store in ampAvg. The size of the array,
+// defined by the number in float[], influences how directly the visual
+// reacts to amplitudal changes in the audio, i.e. beats, breaks, etc.
+float amp = 0;      
+float ampAvg = 0;   
+float ampBuffer [] = new float[10];
+
+// The phase increments are used to get a back and forth motion - numerically wise they are random,
+// as almost everything in this code. So it actually is magic this time! 
+// The first phase is for the colors, the second one for the vector's placement/growth 
+float phasorInc = 1.0 / 500.0;
+float phasorInc2 = 1.0 / 90000.0;
+
+// nReflections sets the amount of reflections in the 'kaleidoscope' figure. 
+int nReflections = 10;
+
+// nAngles sets the amount of possible directions the vector can grow towards.
+int nAngles = 3;
+
+// nPointsPerFrame sets amount of new points to calculated and drawn for each new frame.
+// Increase in points creates more dense figures, but also significantly drops performance.
+// Goes hand-in-hand with frameRate(), which is set in the setup().
+int nPointsPerFrame = 300;
+
+// Sets boundary of the figure - set at beginning of setup() to match canvas height. 
+// Used at the end of draw() for instance to draw a boundary ellipse. 
+float rad = 540;
+
+// Active is used in draw() to check whether or not there is a figure on the canvas.
+int active = 0;
+
+Walker w;
+Phasor p;
+Phasor p2;
+float[] angles;
+
+// Set number of color palettes - actual colors set in setup().
+Palette palette;
+Palette palette2;
+Palette palette3;
+Palette palette4;
+Palette palette5;
+
+// colorParam sets the number of the palette that's in use.
+int colorParam = 1;
+// counter increments with random(0,100) at end of draw().
+// When counter>2222, a new colorParam is set using int(random(1,6)),
+// resulting in the use of a different palette and change of colors.
+int counter = 0;
+
+
+PVector getVCoordinates(PVector v, float d, float a) {
+  // Because of the addition we have this "growing" movement.
+  return new PVector(v.x + d * cos(a), v.y + d * sin(a));
+}
+
+//Atan2 handles quadrant selection. 
+float getAngleFromCenter(PVector v) {
+  return atan2(v.y - height / 2, v.x - width / 2);
+}
+
+class Phasor {
+  float inc;
+  float phase;
+ 
+  Phasor(float inc) {
+    this.inc = inc; 
+  }
+ 
+  void update() {
+    phase += inc;
+    
+    //Phase from 1 to -1 and back 
+    while(abs(phase)>=1){
+      inc=inc*-1;
+      phase += inc;
+    }
+    
+  }
+}
+
+class Walker {
+  PVector v;
+  
+  Walker(float x, float y) {
+    v = new PVector(x, y);
+  }
+   
+  //The name "gauss" indicates the randomness.  
+  void update() {
+    float gauss = p2.phase * random(2,4);
+    //gauss determines radius, angle is selected from array. 
+    v = getVCoordinates(v, gauss, angles[int(random(angles.length))]);
+    
+    /*
+    Keep the scene bounded within a circle. 
+    If a point hits the border bring it back towards the center with a random offset.
+    Later on we will draw a small stroke around the border, this cut-off contributes to the circulair appearance. 
+    */
+    float offset = rad*0.75; 
+    if((dist(v.x, v.y, width / 2, height / 2))>rad){
+     v.x = width/2+random(0,offset);
+     v.y = height/2+random(0,offset);
+    }
+    
+    float a = getAngleFromCenter(v);
+    float d = dist(v.x, v.y, width / 2, height / 2);
+    PVector center = new PVector(width / 2, height / 2);
+    noStroke();
+    
+    //Here comes the beauty, which is in the layering of the colors
+    //which is possible due to a low opacity fill. 
+      
+    if(colorParam == 1){
+      fill(palette.getNorm(abs(p.phase)), map(d, 0, width, 666*amp, 66));
+    }
+    else if(colorParam == 2){
+      fill(palette2.getNorm(abs(p.phase)), map(d, 0, width, 666*amp, 66));
+    }
+    else if(colorParam == 3){
+      fill(palette3.getNorm(abs(p.phase)), map(d, 0, width, 666*amp, 66));
+    }
+    else if(colorParam == 4){
+      fill(palette4.getNorm(abs(p.phase)), map(d, 0, width, 666*amp, 66));
+    }
+    else{
+      fill(palette5.getNorm(abs(p.phase)), map(d, 0, width, 666*amp, 66));
+    }
+    //now use gauss for point thickness, can be done differenly of course. 
+    gauss = max(0.5, abs(gauss) / 2);
+    for (int i = 0; i < nReflections; i++) {
+      float thisAngle = a + (TWO_PI / (float) nReflections) * i;
+      
+      PVector thisV = getVCoordinates(center, d, thisAngle);
+      ellipse(thisV.x, thisV.y, gauss, gauss);
+      //mirror the point, thus actually add an extra reflection
+      thisV = getVCoordinates(center, d, PI - thisAngle);
+      ellipse(thisV.x, thisV.y, gauss, gauss);
+    }
+  }
+}
+
+// Cool way to set the colors 
+class Palette {
+  ArrayList<Integer> colors;
+  Palette() {
+    colors = new ArrayList<Integer>();
+  }
+  void add(color c) {
+    colors.add(c);
+  }
+  color getNorm(float p) {
+    int index = (int) (p * colors.size());
+    color c1 = colors.get(index);
+    color c2 = colors.get((index + 1) % colors.size());
+    //if we have a "high/very high" volume, we add a orange/red accent like in stained glass. 
+    if(amp>ampAvg*3.5){
+      color cr = color(225,0,38);
+      color cb = color(0,0,0);
+      float rand = random(0,1); 
+      return lerpColor(cr, cb, rand);
+    }
+    else if(amp>ampAvg*3){
+      color co = color(225,128,0);
+      color cb = color(0,0,0);
+      float rand = random(0,1); 
+      return lerpColor(co, cb, rand);
+    }
+    else{
+      return lerpColor(c1, c2, p * colors.size() - index);
+    }
+  }
+}
+
+void setup() {
+  
+  // Only with the P2D renderer we get the fullscreen unit to work.
+  fullScreen();
+  // Framerate set to 30 for better performance.
+  // Otherwise, framerate is auto-set to 55.
+  frameRate(30);
+  // Set background color.
+  background(0); 
+  
+  // Links boundary of the figure to the height of the canvas/screen.
+  // Used at the end of draw() for instance to draw a boundary ellipse.
+  rad = height/2;
+  
+  // Create the array of angles, simply 2*Pi/nAngles. 
+  angles = new float[nAngles];
+  for (int i = 0; i < angles.length; i++) {
+    angles[i] = ((float) i / (float) nAngles) * TWO_PI;
+  }
+  
+  // Set WALKER starting coordinates.
+  w = new Walker(width / 2, height / 2);
+  
+  p = new Phasor(phasorInc);
+  p2 = new Phasor(phasorInc2);
+  
+  // SET COLOR PALETTES ------------------------
+  // Color palettes source: 
+  // http://www.colourlovers.com/palette/
+  
+  // Palette 1:  
+  palette = new Palette();
+  palette.add(color(4, 7, 28));
+  palette.add(color(9, 62, 112));
+  palette.add(color(136, 135, 217));
+  palette.add(color(199, 156, 0));
+  palette.add(color(255, 246, 79));
+  
+  // Palette 2:
+  palette2 = new Palette();
+  palette2.add(color(11, 17, 13));
+  palette2.add(color(44, 77, 86));
+  palette2.add(color(195, 170, 114));
+  palette2.add(color(220, 118, 18));
+  palette2.add(color(189, 50, 0));
+  
+  // Palette 3:
+  palette3 = new Palette();
+  palette3.add(color(146,179,38));
+  palette3.add(color(254, 234, 114));
+  palette3.add(color(37, 148, 132));
+  palette3.add(color(217, 255, 171));
+  palette3.add(color(246, 189, 76));
+  palette3.add(color(24,63,140));
+  
+  // Palette 4:
+  palette4 = new Palette();
+  palette4.add(color(255, 136, 231));
+  palette4.add(color(255, 245, 193));
+  palette4.add(color(252, 143, 110));
+  palette4.add(color(122, 11, 18));
+  palette4.add(color(123, 54, 98));
+  
+  // Palette 5:
+  palette5 = new Palette();
+  palette5.add(color(79, 156, 122));
+  palette5.add(color(137, 119, 193));
+  palette5.add(color(255, 255, 118));
+  palette5.add(color(244, 244, 244));
+  palette5.add(color(255, 40, 70));
+  
+  // CREATE NEW AUDIO OBJECT -------------------
+  minim = new Minim(this);
+  
+  // DEFINE AUDIO INPUT ------------------------
+  // NOTE: Recording device cannot be selected through code,
+  // but can only be changed through computer's 
+  // 'RECORDING DEVICES' settings.
+  in = minim.getLineIn( Minim.MONO, 256);
+ 
+}
+
+void draw() {
+  
+  //Get the max amp from the buffer
+  for(int i = 0; i < in.bufferSize() - 1; i++) {
+    if ( abs(in.mix.get(i)) > amp ) {
+      amp = abs(in.mix.get(i));
+    }
+  }
+  
+  //Determine the average amplitude of the input audio
+  //Using this is a better indication of changes in music then a fixed threshold 
+  ampAvg = amp/ampBuffer.length;
+  for(int j=ampBuffer.length-1; j>0; j--){
+    ampBuffer[j]=ampBuffer[j-1];
+    ampAvg += (ampBuffer[j]/ampBuffer.length); 
+  }
+  ampBuffer[0]=amp;
+  
+  //Randomly change the palette 
+  if(counter>2222){
+   colorParam = int(random(1,6)); 
+   counter = 0;
+  }
+  
+  //Draw if the beat "changes"
+  if(amp>1.00*ampAvg || (active == 1 && random(1,10)>2)){
+    active = 1; 
+    int lr = int(random(1,2));
+    for(int l=0; l<lr; l++){
+      for (int i = 0; i < nPointsPerFrame; i++) {
+        p.update();
+        p2.update();
+        w.update();
+      }
+    }
+  }
+  
+  //slow down reaction time a bit to make it less intense  
+  else if(random(1,10)>0){
+    fill(0); 
+     ellipse(width/2,height/2,rad*2,rad*2); 
+     w.v.x=width/2+random(-rad*amp*5,rad*amp*5);
+     w.v.y=height/2+random(-rad*amp*5,rad*amp*5);
+     active = 0;
+  }
+  else{
+    active=0;
+  }
+  
+  //In order to have a nice circular border(quickly), have a thin stroke.
+  noFill();
+  stroke(0);
+  strokeWeight(40);
+  ellipse(width/2,height/2,rad*2,rad*2);
+  amp=0;
+  
+  //Use counter for the colorchange
+  counter+= int(random(0,100));
+  ampAvg=0; 
+}
