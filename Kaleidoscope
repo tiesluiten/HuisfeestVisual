@@ -1,8 +1,13 @@
 /*
-Credits to Jacob Joaquin.
-AudioVisual Interaction added by Wouter Jongeneel and Ties Luiten.
+Built upon Random Walker Kaleidoscope by Jacob Joaquin.
+SOURCE: https://www.openprocessing.org/sketch/135789
 -
-There are some minor adjustments plus added a simple way to include audio vol. as input.
+Audio-Interaction added by Wouter Jongeneel and Ties Luiten.
+http://p-p-plus.tumblr.com/
+http://www.tiesluiten.com/
+-
+There are some minor adjustments plus added a simple way
+to include and analyze audio vol. as input.
 -
 For audio analysis we make use of the Minim library.
 SOURCE: http://code.compartmental.net/minim/audioinput_method_addlistener.html
